@@ -3,6 +3,20 @@ import "./Chatbot.css";
 
 const WELCOME = "Hi! I am Cheeku. Please tell me how I can help you.";
 
+const DUMMY_REPLIES = [
+  "Here is an alternative perspective on that!",
+  "Let me rephrase that with more detail for you.",
+  "Regenerated: This is a fresh response generated for testing.",
+  "Here is another way to think about what you asked."
+];
+
+// Dummy historical conversations for frontend testing
+const DUMMY_PREVIOUS_CHATS = [
+  { id: 101, title: "Queries about admissions", date: "Yesterday" },
+  { id: 102, title: "Course fee structures", date: "3 days ago" },
+  { id: 103, title: "Campus facilities & hostel", date: "Last week" }
+];
+
 // Cheeku the robot SVG avatar
 function CheekuAvatar({ size = 36 }) {
   return (
@@ -30,55 +44,134 @@ function getBotReply(text) {
 }
 
 function Chatbot() {
-  // Set to true so it opens immediately on screen
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [showGreeting, setShowGreeting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([{ sender: "bot", text: WELCOME }]);
+  const [messages, setMessages] = useState([
+    { id: 1, sender: "bot", text: WELCOME, feedback: null }
+  ]);
+  const [copiedIndex, setCopiedIndex] = useState(null);
 
   // Auto-scroll to newest message
   const bottomRef = useRef(null);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, isOpen]);
+    if (!showHistory) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isTyping, isOpen, showHistory]);
+
+  // Show greeting bubble for 4 seconds when chat is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setShowGreeting(true);
+      const t = setTimeout(() => setShowGreeting(false), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen]);
 
   const sendMessage = () => {
     const userMessage = input.trim();
     if (!userMessage || isTyping) return;
 
-    setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now(), sender: "user", text: userMessage }
+    ]);
     setInput("");
     setIsTyping(true);
 
     setTimeout(() => {
-      setMessages((prev) => [...prev, { sender: "bot", text: getBotReply(userMessage) }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: getBotReply(userMessage),
+          feedback: null
+        }
+      ]);
       setIsTyping(false);
     }, 1000);
   };
 
   const clearChat = () => {
-    setMessages([{ sender: "bot", text: WELCOME }]);
+    setMessages([{ id: 1, sender: "bot", text: WELCOME, feedback: null }]);
     setIsTyping(false);
   };
 
-  // Closed state: Floating icon button
+  // 1. Copy Response
+  const handleCopy = async (index, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  // 2 & 3. Like / Dislike Response
+  const handleFeedback = (index, type) => {
+    setMessages((prev) =>
+      prev.map((msg, i) =>
+        i === index
+          ? { ...msg, feedback: msg.feedback === type ? null : type }
+          : msg
+      )
+    );
+  };
+
+  // 4. Regenerate Response (Dummy Data)
+  const handleRegenerate = (index) => {
+    const randomReply =
+      DUMMY_REPLIES[Math.floor(Math.random() * DUMMY_REPLIES.length)];
+    setMessages((prev) =>
+      prev.map((msg, i) =>
+        i === index
+          ? { ...msg, text: randomReply, feedback: null }
+          : msg
+      )
+    );
+  };
+
+  // Switch to a previous chat
+  const handleSelectChat = (chat) => {
+    setMessages([
+      { id: 1, sender: "user", text: `Loaded: ${chat.title}` },
+      { id: 2, sender: "bot", text: `Resuming conversation from ${chat.date}. How can I assist further?`, feedback: null }
+    ]);
+    setShowHistory(false);
+  };
+
+  // Closed state
   if (!isOpen) {
     return (
-      <button 
-        type="button" 
-        className="chat-icon" 
-        onClick={() => setIsOpen(true)} 
-        aria-label="Open chat"
-      >
-        <CheekuAvatar size={48} />
-      </button>
+      <div className="chat-launcher">
+        {showGreeting && <div className="greeting-bubble">Hi, I'm Cheeku!</div>}
+        <button
+          type="button"
+          className="chat-icon"
+          onMouseEnter={() => setShowGreeting(true)}
+          onMouseLeave={() => setShowGreeting(false)}
+          onTouchStart={() => setShowGreeting(true)}
+          onClick={() => {
+            setShowGreeting(false);
+            setIsOpen(true);
+          }}
+          aria-label="Open chat"
+        >
+          <CheekuAvatar size={48} />
+        </button>
+      </div>
     );
   }
 
-  // Open state: Main chat window
+  // Open state
   return (
-    <div className={`chat-container ${isExpanded ? "expanded" : ""}`}>
+    <div className={"chat-container " + (isExpanded ? "expanded" : "")}>
       <div className="chat-header">
         <CheekuAvatar />
         <div className="chat-title">
@@ -86,13 +179,24 @@ function Chatbot() {
           <p>Padmasini assistant</p>
         </div>
 
+        {/* Previous Chats button inside chatbot box */}
+        <button
+          type="button"
+          className={`chat-header-btn ${showHistory ? "active" : ""}`}
+          onClick={() => setShowHistory(!showHistory)}
+          title="Previous Chats"
+          aria-label="Previous Chats"
+        >
+          💬 History
+        </button>
+
         <button type="button" onClick={clearChat} title="Clear chat" aria-label="Clear chat">
           🗑
         </button>
-        <button 
-          type="button" 
-          onClick={() => setIsExpanded(!isExpanded)} 
-          title="Toggle Size" 
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          title="Toggle Size"
           aria-label="Expand or shrink chat"
         >
           {isExpanded ? "🗗" : "🗖"}
@@ -102,36 +206,107 @@ function Chatbot() {
         </button>
       </div>
 
-      <div className="chat-messages">
-        {messages.map((message, index) => (
-          <div key={index} className={`message-row ${message.sender}`}>
-            {message.sender === "bot" && <CheekuAvatar size={28} />}
-            <div className={`message ${message.sender}`}>{message.text}</div>
+      {showHistory ? (
+        /* History View */
+        <div className="history-view">
+          <div className="history-header">
+            <h4>Previous Conversations</h4>
+            <button type="button" onClick={() => setShowHistory(false)}>Back to Chat</button>
           </div>
-        ))}
-
-        {isTyping && (
-          <div className="message-row bot">
-            <CheekuAvatar size={28} />
-            <div className="message bot typing">
-              Cheeku is thinking<span>.</span><span>.</span><span>.</span>
-            </div>
+          <div className="history-list">
+            {DUMMY_PREVIOUS_CHATS.map((chat) => (
+              <div
+                key={chat.id}
+                className="history-item"
+                onClick={() => handleSelectChat(chat)}
+              >
+                <div className="history-item-title">{chat.title}</div>
+                <div className="history-item-date">{chat.date}</div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
+      ) : (
+        /* Standard Messages View */
+        <>
+          <div className="chat-messages">
+            {messages.map((message, index) => (
+              <div key={message.id || index} className={"message-row " + message.sender}>
+                {message.sender === "bot" && <CheekuAvatar size={28} />}
 
-        <div ref={bottomRef} />
-      </div>
+                {message.sender === "bot" ? (
+                  <div className="bot-message-wrapper">
+                    <div className="message bot">{message.text}</div>
+                    
+                    {/* Action buttons below Cheeku's response */}
+                    <div className="bot-actions">
+                      <button
+                        type="button"
+                        className="bot-action-btn"
+                        onClick={() => handleCopy(index, message.text)}
+                        title="Copy response"
+                      >
+                        {copiedIndex === index ? "Copied!" : "📋 Copy"}
+                      </button>
 
-      <div className="chat-input">
-        <input
-          type="text"
-          placeholder="Type your message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-        />
-        <button type="button" onClick={sendMessage}>Send</button>
-      </div>
+                      <button
+                        type="button"
+                        className={`bot-action-btn ${message.feedback === "like" ? "active-like" : ""}`}
+                        onClick={() => handleFeedback(index, "like")}
+                        title="Like response"
+                      >
+                        👍
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`bot-action-btn ${message.feedback === "dislike" ? "active-dislike" : ""}`}
+                        onClick={() => handleFeedback(index, "dislike")}
+                        title="Dislike response"
+                      >
+                        👎
+                      </button>
+
+                      <button
+                        type="button"
+                        className="bot-action-btn"
+                        onClick={() => handleRegenerate(index)}
+                        title="Regenerate response"
+                      >
+                        🔄 Regenerate
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="message user">{message.text}</div>
+                )}
+              </div>
+            ))}
+
+            {isTyping && (
+              <div className="message-row bot">
+                <CheekuAvatar size={28} />
+                <div className="message bot typing">
+                  Cheeku is thinking<span>.</span><span>.</span><span>.</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </div>
+
+          <div className="chat-input">
+            <input
+              type="text"
+              placeholder="Type your message..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            />
+            <button type="button" onClick={sendMessage}>Send</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
