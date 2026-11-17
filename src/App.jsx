@@ -1,20 +1,27 @@
-
-import Header from "./navigation/Header";
-import Footer from "./navigation/Footer";
-import Chatbot from "./components/Chatbot";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./components/Login";
+import Home from "./components/Home";
 import "./App.css";
 
 function App() {
+  const token = localStorage.getItem("token");
+
   return (
-    <div id="home">
-      <Header />
+    <Routes>
+      <Route
+        path="/"
+        element={
+          token ? <Navigate to="/home" /> : <Login />
+        }
+      />
 
-      <main id="chat">
-        <Chatbot />
-      </main>
-
-      <Footer />
-    </div>
+      <Route
+        path="/home"
+        element={
+          token ? <Home /> : <Navigate to="/" />
+        }
+      />
+    </Routes>
   );
 }
 

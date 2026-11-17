@@ -56,7 +56,7 @@ function Login() {
             setMessage("Login successful!");
 
             // Redirect to chatbot after login
-            window.location.href = "/chatbot";
+            window.location.href = "/home";
 
         } catch (error) {
             setMessage(error.message);
